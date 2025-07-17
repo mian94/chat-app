@@ -6,7 +6,7 @@ const messageRoutes = require("./routes/messages");
 const socket = require("socket.io");
 
 const app = express();
-require("dotenv").config();//加载 .env 文件中定义的环境变量
+require("dotenv").config(); //加载 .env 文件中定义的环境变量
 
 app.use(cors());
 app.use(express.json());
