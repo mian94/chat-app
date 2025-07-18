@@ -41,10 +41,10 @@ module.exports.login = async (req, res, next) => {
 
 module.exports.getAllUsers = async (req, res, next) => {
   try {
+    //获取所有 _id 不等于 req.params.id 的用户。($ne 是 MongoDB 的操作符，表示 “不等于”)
     const users = await User.find({ _id: { $ne: req.params.id } }).select([
       "email",
       "username",
-      "avatarImage",
       "_id",
     ]);
     return res.json(users);
