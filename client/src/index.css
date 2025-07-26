@@ -1,0 +1,12 @@
+/*有助于不同浏览器下的样式一致性*/
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;/*让元素的宽度和高度包括 padding 和 border，便于布局*/
+}
+
+/* 设置body最大尺寸 */
+body {
+  max-height: 100vh;
+  max-width: 100vw;
+}
