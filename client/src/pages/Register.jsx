@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import axios from "axios";
 import { registerRoute } from "../utils/APIRoutes";
-import { useNavigate} from "react-router-dom";
+import { useNavigate , Link } from "react-router-dom";
 import styled from "styled-components";
 
 function Register() {
@@ -83,6 +83,9 @@ function Register() {
             onChange={(e) => handleChange(e)}
           />
           <button type="submit">Create User</button>
+          <span>
+            Already have an account ? <Link to="/login">Login.</Link>
+          </span>
         </form>
     </FormContainer>
     </>
@@ -145,6 +148,14 @@ const FormContainer = styled.div`
     text-transform: uppercase;
     &:hover {
       background-color: #4e0eff;
+    }
+  }
+  span {
+    color: white;
+    a {
+      color: #4e0eff;
+      text-decoration: none;
+      font-weight: bold;
     }
   }
 `;

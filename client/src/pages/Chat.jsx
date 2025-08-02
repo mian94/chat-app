@@ -7,6 +7,13 @@ import ChatContainer from "../components/ChatContainer";
 import Contacts from "../components/Contacts";
 import styled from "styled-components";
 
+// 定义 AI 用户信息
+const AI_USER = {
+  _id: "ai-qwen",
+  username: "通义千问",
+  isAI: true,
+};
+
 export default function Chat() {
   const navigate = useNavigate();
   //使用 useRef 来保存 socket 实例，确保在整个组件生命周期中都能访问到同一个 socket 连接。
@@ -37,12 +44,20 @@ export default function Chat() {
     }
   }, [currentUser]);
 
-  //加载联系人列表
+  //加载联系人列表并添加AI用户
   useEffect(() => {
     const fetchContacts = async () => {
-      if (currentUser) {
-        const res = await axios.get(`${allUsersRoute}/${currentUser._id}`);
-        setContacts(res.data);
+      if(currentUser){
+        try{
+          const res = await axios.get(`${allUsersRoute}/${currentUser._id}`);
+          // 将 AI 用户添加到联系人列表中
+          const updateContacts = [...res.data,AI_USER];
+          setContacts(updateContacts);
+        }catch(error){
+          console.error("Error fetching contacts:", error);
+          // 即使出错，也添加 AI 用户
+          setContacts([AI_USER]);
+        }
       }
     };
     fetchContacts();

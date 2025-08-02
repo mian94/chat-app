@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import axios from "axios";
-import { useNavigate } from "react-router-dom";
+import { useNavigate , Link } from "react-router-dom";
 import { loginRoute } from "../utils/APIRoutes";
 import styled from "styled-components";
 
@@ -65,6 +65,9 @@ export default function Login() {
             onChange={(e) => handleChange(e)}
           />
           <button type="submit">Log In</button>
+          <span>
+            Don't have an account ? <Link to="/register">Create One.</Link>
+          </span>
         </form>
       </FormContainer>
     </>
@@ -127,6 +130,14 @@ const FormContainer = styled.div`
     text-transform: uppercase;
     &:hover {
       background-color: #4e0eff;
+    }
+  }
+  span {
+    color: white;
+    a {
+      color: #4e0eff;
+      text-decoration: none;
+      font-weight: bold;
     }
   }
 `;

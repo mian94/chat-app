@@ -5,6 +5,7 @@ import { v4 as uuidv4 } from "uuid";//生成唯一 ID，用于给每条消息分
 import axios from "axios";
 import { sendMessageRoute, recieveMessageRoute } from "../utils/APIRoutes";
 import styled from "styled-components";
+import Logout from "./Logout";
 
 //socket(ref)：	Socket.IO 客户端连接实例，用 useRef 包装
 export default function ChatContainer({ currentChat, socket }) {
@@ -41,6 +42,7 @@ export default function ChatContainer({ currentChat, socket }) {
 
   const handleSendMsg = (msg) => {
     const user = JSON.parse(localStorage.getItem("chat-app-user"));
+    const msgId = uuidv4(); // 在发送消息时生成唯一ID
     // 通过 WebSocket 发送消息
     socket.current.emit("send-msg", {
       to: currentChat._id,
@@ -56,7 +58,7 @@ export default function ChatContainer({ currentChat, socket }) {
     // 本地更新消息列表
     setMessages([
       ...messages,
-      { fromSelf: true, message: msg }
+      { id:msgId, fromSelf: true, message: msg }
     ]);
   };
 
@@ -64,9 +66,10 @@ export default function ChatContainer({ currentChat, socket }) {
   useEffect(() => {
     //socket 是一个通过 useRef 创建的引用，指向 WebSocket 连接对象（如 Socket.IO 的实例）。
     if (socket.current) {
-      socket.current.on("msg-recieve", (msg) => {
+      socket.current.on("msg-recieve", (msgData) => {
+        console.log("【DIAGNOSIS】Raw msg-recieve event fired!", msgData);
         //fromSelf: false表示这条消息不是当前用户自己发送的。
-        setArrivalMessage({ fromSelf: false, message: msg });
+        setArrivalMessage({ id: uuidv4(), fromSelf: false, message: msgData.msg });
       });
     }
   }, [socket.current]);
@@ -90,7 +93,9 @@ export default function ChatContainer({ currentChat, socket }) {
             <h3>{currentChat?.username}</h3>
           </div>
         </div>
+        <Logout />
       </div>
+
       <div className="chat-messages">
         {messages.map((message) => {
           return (
