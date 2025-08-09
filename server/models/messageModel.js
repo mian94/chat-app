@@ -3,7 +3,13 @@ const mongoose = require("mongoose");
 const MessageSchema = mongoose.Schema(
   {
     message: {
-      text: { type: String, required: true },
+      type: {
+        text: { type: String, default: "" },
+        mediaUrl: { type: String, default: null },
+        mediaType: { type: String, default: null }, // "image", "video", "file"
+        fileName: { type: String, default: null },
+      },
+      required: true,
     },
     users: Array,
     //标识这条消息的发送者
