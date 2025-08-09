@@ -13,10 +13,11 @@ export default function ChatContainer({ currentChat, socket }) {
   const scrollRef = useRef();//引用最后一条消息元素，用于滚动到底部
   const [arrivalMessage, setArrivalMessage] = useState(null);//接收到的新消息
 
+  const user = JSON.parse(localStorage.getItem("chat-app-user"));
+
   //获取历史聊天记录
   useEffect(() => {
     const fetchMessages = async () => {
-      const user = JSON.parse(localStorage.getItem("chat-app-user"));
       if (user && currentChat) {
         const res = await axios.post(recieveMessageRoute, {
           from: user._id,
@@ -32,33 +33,40 @@ export default function ChatContainer({ currentChat, socket }) {
   useEffect(() => {
     const getCurrentChat = async () => {
       if (currentChat) {
-        await JSON.parse(
-          localStorage.getItem('chat-app-user')
-        )._id;
+        await JSON.parse(localStorage.getItem('chat-app-user'))._id;
       }
     };
     getCurrentChat();
   }, [currentChat]);
 
-  const handleSendMsg = (msg) => {
-    const user = JSON.parse(localStorage.getItem("chat-app-user"));
-    const msgId = uuidv4(); // 在发送消息时生成唯一ID
-    // 通过 WebSocket 发送消息
+  // 发送消息（文本 or 文件）
+  const handleSendMsg = async (messageContent) => {
+    if (!currentChat) return;
+
+    const msgId = uuidv4();
+
+    // 通过 WebSocket 发送
     socket.current.emit("send-msg", {
       to: currentChat._id,
       from: user._id,
-      msg,
+      msg: messageContent,
     });
-    // 通过 HTTP 请求保存消息
-    axios.post(sendMessageRoute, {
+
+    // 通过 HTTP 保存到数据库
+    await axios.post(sendMessageRoute, {
       from: user._id,
       to: currentChat._id,
-      message: msg,
+      message: messageContent,
     });
-    // 本地更新消息列表
-    setMessages([
-      ...messages,
-      { id:msgId, fromSelf: true, message: msg }
+
+    // 本地更新
+    setMessages(prev => [
+      ...prev,
+      {
+        id: msgId,
+        fromSelf: true,
+        message: messageContent
+      }
     ]);
   };
 
@@ -67,9 +75,18 @@ export default function ChatContainer({ currentChat, socket }) {
     //socket 是一个通过 useRef 创建的引用，指向 WebSocket 连接对象（如 Socket.IO 的实例）。
     if (socket.current) {
       socket.current.on("msg-recieve", (msgData) => {
-        console.log("【DIAGNOSIS】Raw msg-recieve event fired!", msgData);
+        console.log("【收到消息】", msgData);
         //fromSelf: false表示这条消息不是当前用户自己发送的。
-        setArrivalMessage({ id: uuidv4(), fromSelf: false, message: msgData.msg });
+        //统一消息结构
+        const messageContent = typeof msgData.msg === 'string'
+          ? { text: msgData.msg, mediaUrl: null, mediaType: null, fileName: null}
+          : msgData.msg; // 如果已经是对象（比如文件消息），直接使用
+
+        setArrivalMessage({
+          id: uuidv4(),
+          fromSelf: false,
+          message: messageContent
+        });
       });
     }
   }, [socket.current]);
@@ -99,22 +116,43 @@ export default function ChatContainer({ currentChat, socket }) {
       <div className="chat-messages">
         {messages.map((message) => {
           return (
-            <div ref={scrollRef} key={uuidv4()}>
+            //key={uuidv4()}每次渲染都生成新 key，会导致 React 重新渲染所有消息
+            <div ref={scrollRef} key={message.id}>
               <div
                 //判断消息是自己发的还是别人发的，用于不同样式展示
                 className={`message ${
                   message.fromSelf ? "sended" : "recieved"
                 }`}
               >
-                <div className="content ">
-                  <p>{message.message}</p>
+                <div className="content">
+                  {/* 判断消息是否包含媒体URL */}
+                  {message.message.mediaUrl && !message.message.mediaUrl.startsWith('blob:') ? (
+                    message.message.mediaType === "image" ? (
+                      <img src={message.message.mediaUrl} alt="Media" />
+                    ) : message.message.mediaType === "video" ?(
+                      <video controls>
+                        <source src={message.message.mediaUrl} type="video/mp4" />
+                        不支持视频
+                      </video>
+                    ):(
+                      <a 
+                        href={message.message.mediaUrl} 
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                      >
+                        📄 {message.message.fileName}
+                      </a>
+                    )
+                  ) : (
+                    <p>{message.message.text}</p>
+                  )}
                 </div>
               </div>
             </div>
           );
         })}
       </div>
-      <ChatInput handleSendMsg={handleSendMsg} />
+      <ChatInput handleSendMsg={handleSendMsg}/>
     </Container>
   );
 }
@@ -188,6 +226,14 @@ const Container = styled.div`
       .content {
         background-color: #9900ff20;
       }
+    }
+    img {
+      max-width: 100%;
+      height: auto;
+    }
+    video {
+      max-width: 100%;
+      height: auto;
     }
   }
 `;

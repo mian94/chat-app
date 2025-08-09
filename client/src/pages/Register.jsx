@@ -16,8 +16,13 @@ function Register() {
     const handleValidation = () => {
       const { password, confirmPassword, username, email } = values;
       if (password !== confirmPassword) {
+        alert("两次密码不一致");
         return false;
       } else if (email === "") {
+        alert("邮件不能为空");
+        return false;
+      }else if(username === "") {
+        alert("请输入用户名");
         return false;
       }
       return true;
@@ -34,7 +39,7 @@ function Register() {
         });
 
         if (data.status === false) {
-          alert("注册失败");
+          alert(data.msg||"注册失败");
         }
         if (data.status === true) {
           localStorage.setItem(

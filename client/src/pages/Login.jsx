@@ -15,8 +15,10 @@ export default function Login() {
   const validateForm = () => {
     const { username, password } = values;
     if (username === "") {
+      alert("请输入用户名");
       return false;
     } else if (password === "") {
+      alert("密码不能为空");
       return false;
     }
     return true;
@@ -31,7 +33,7 @@ export default function Login() {
         password,
       });
       if (data.status === false) {
-       alert("登录失败");
+       alert(data.msg||"登录失败");
       }
       if (data.status === true) {
         localStorage.setItem(
