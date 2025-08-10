@@ -8,4 +8,7 @@ export default defineConfig({
   },
   plugins: [react()],
   root: 'src', // 指定 src 目录为项目源码根目录
+  build: {
+    outDir: 'dist'
+  }
 })
