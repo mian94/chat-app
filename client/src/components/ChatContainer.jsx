@@ -29,7 +29,7 @@ export default function ChatContainer({ currentChat, socket }) {
     fetchMessages();
   }, [currentChat]);
 
-  //获取当前聊天对象信息
+  //获取当前聊天对象信息 
   useEffect(() => {
     const getCurrentChat = async () => {
       if (currentChat) {
