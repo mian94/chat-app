@@ -112,8 +112,8 @@ mongoose
 });
 
 //启动服务器并监听指定端口
-const server = app.listen(process.env.PORT,() => {
-    console.log(`Server Started on Port ${process.env.PORT}`)
+const server = app.listen(process.env.PORT||3001,'0.0.0.0',() => {
+    console.log(`Server Started on Port ${process.env.PORT||3001}`)
 });
 
 //初始化Socket.IO
