@@ -16,6 +16,7 @@ require("dotenv").config(); //加载 .env 文件中定义的环境变量。
 
 app.use(cors());
 app.use(express.json());
+app.use(express.static('./dist'));
 
 app.use("/api/auth",userRoutes);
 app.use("/api/messages", messageRoutes);
@@ -112,14 +113,14 @@ mongoose
 });
 
 //启动服务器并监听指定端口
-const server = app.listen(process.env.PORT||3001,'0.0.0.0',() => {
-    console.log(`Server Started on Port ${process.env.PORT||3001}`)
+const server = app.listen(process.env.PORT,() => {
+    console.log(`Server Started on Port ${process.env.PORT}`)
 });
 
 //初始化Socket.IO
 const io = socket(server, {
   cors: {
-    origin:  "http://154.9.253.28:8080",
+    origin: "http://localhost:3000",
     credentials: true,
   },
 });
