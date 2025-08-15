@@ -120,7 +120,7 @@ const server = app.listen(process.env.PORT,() => {
 //初始化Socket.IO
 const io = socket(server, {
   cors: {
-    origin: "http://localhost:3000",
+    origin: "http://154.9.253.28:5000",
     credentials: true,
   },
 });
