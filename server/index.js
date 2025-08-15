@@ -21,6 +21,11 @@ app.use(express.static(path.join(__dirname,'dist')));
 app.use("/api/auth",userRoutes);
 app.use("/api/messages", messageRoutes);
 
+// SPA fallback：所有其他路由都返回 index.html
+app.get('*', (req, res) => {
+  res.sendFile(path.join(__dirname, 'dist', 'index.html'));
+});
+
 // 确保 uploads 目录存在
 const uploadDir = path.join(__dirname, 'uploads');
 if (!fs.existsSync(uploadDir)) {
@@ -123,11 +128,6 @@ const io = socket(server, {
     origin: "http://154.9.253.28:5000",
     credentials: true,
   },
-});
-
-// SPA fallback：所有其他路由都返回 index.html
-app.get('*', (req, res) => {
-  res.sendFile(path.join(__dirname, 'dist', 'index.html'));
 });
 
 //API函数
@@ -274,6 +274,7 @@ io.on("connection", (socket) => {
     }
   });
 });
+
 
 
 
