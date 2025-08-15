@@ -125,6 +125,11 @@ const io = socket(server, {
   },
 });
 
+// SPA fallback：所有其他路由都返回 index.html
+app.get('*', (req, res) => {
+  res.sendFile(path.join(__dirname, 'dist', 'index.html'));
+});
+
 //API函数
 async function callQwenApi(msg,user,aiUserId) {
   console.log("Calling Qwen API with message:", msg);
@@ -269,6 +274,7 @@ io.on("connection", (socket) => {
     }
   });
 });
+
 
 
 
