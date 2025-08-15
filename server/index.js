@@ -16,7 +16,7 @@ require("dotenv").config(); //加载 .env 文件中定义的环境变量。
 
 app.use(cors());
 app.use(express.json());
-app.use(express.static(path.join(__dirname,'dist')));
+app.use(express.static('dist'));
 
 
 app.use("/api/auth",userRoutes);
