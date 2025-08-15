@@ -3,6 +3,7 @@ import axios from "axios";
 import { registerRoute } from "../utils/APIRoutes";
 import { useNavigate , Link } from "react-router-dom";
 import styled from "styled-components";
+import logo from "../assets/logo.svg";
 
 function Register() {
     const navigate = useNavigate();
@@ -60,7 +61,7 @@ function Register() {
     <FormContainer>
         <form action="" onSubmit={(event) => handleSubmit(event)}>
           <div className="brand">
-            <img src="../assets/logo.svg" alt="logo" />
+            <img src="logo" alt="logo" />
             <h1>注册</h1>
           </div>
           <input

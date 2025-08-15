@@ -1,6 +1,7 @@
 //用于展示用户的联系人列表，并允许用户选择一个联系人进行聊天。
 import React, { useState, useEffect } from "react";
 import styled from "styled-components";
+import logo from "../assets/logo.svg";
 
 //contacts（联系人列表）和 changeChat（切换当前聊天对象的回调函数）
 export default function Contacts({ contacts, changeChat }) {
@@ -25,7 +26,7 @@ export default function Contacts({ contacts, changeChat }) {
       <>
         <Container>
           <div className="brand">
-            <img src="../assets/logo.svg" alt="logo" />
+            <img src="logo" alt="logo" />
             <h3>chat</h3>
           </div>
           <div className="contacts">

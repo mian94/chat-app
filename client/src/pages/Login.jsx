@@ -3,6 +3,7 @@ import axios from "axios";
 import { useNavigate , Link } from "react-router-dom";
 import { loginRoute } from "../utils/APIRoutes";
 import styled from "styled-components";
+import logo from "../assets/logo.svg";
 
 export default function Login() {
   const navigate = useNavigate();
@@ -50,7 +51,7 @@ export default function Login() {
       <FormContainer>
         <form action="" onSubmit={(event) => handleSubmit(event)}>
           <div className="brand">
-            <img src="../assets/logo.svg" alt="logo" />
+            <img src="logo" alt="logo" />
             <h1>登录</h1>
           </div>
           <input
