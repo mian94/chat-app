@@ -51,7 +51,7 @@ export default function Login() {
       <FormContainer>
         <form action="" onSubmit={(event) => handleSubmit(event)}>
           <div className="brand">
-            <img src="logo" alt="logo" />
+            <img src={logo} alt="logo" />
             <h1>登录</h1>
           </div>
           <input

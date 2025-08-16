@@ -61,7 +61,7 @@ function Register() {
     <FormContainer>
         <form action="" onSubmit={(event) => handleSubmit(event)}>
           <div className="brand">
-            <img src="logo" alt="logo" />
+            <img src={logo} alt="logo" />
             <h1>注册</h1>
           </div>
           <input
