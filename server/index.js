@@ -82,7 +82,7 @@ app.post('/api/upload', upload.single('file'), (req, res) => {
 // 提供静态文件服务，让上传的文件可以被访问
 app.use('/uploads', express.static(uploadDir));
 
-global.AI_USER_ID = null;
+global.AI_USER_ID = null; 
 mongoose
 .connect(process.env.MONGO_URL)
 .then(async() => {
