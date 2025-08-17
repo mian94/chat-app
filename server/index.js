@@ -110,9 +110,6 @@ mongoose
 })
 .catch((err) => {
     console.log(err.message);
-    const server = app.listen(process.env.PORT, () => {
-      console.log(`Server Started on Port ${process.env.PORT} (DB connection failed)`);
-    });
 });
 
 //API函数
