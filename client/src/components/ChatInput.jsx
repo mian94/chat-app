@@ -31,7 +31,7 @@ export default function ChatInput({ handleSendMsg }) {
     formData.append('file', file); // 字段名必须是 'file'，和后端一致
 
     try {
-      const response = await axios.post('http://localhost:5000/api/upload', formData, {
+      const response = await axios.post('http://154.9.253.28:5000/api/upload', formData, {
         headers: {
           'Content-Type': 'multipart/form-data'
         }
