@@ -172,7 +172,7 @@ async function callQwenApi(msg,user,aiUserId) {
     //初始化Socket.IO
     const io = socket(server, {
       cors: {
-        origin: "http://8.137.53.3:5000",
+        origin: "http://8.137.53.3:3000",
         credentials: true,
       },
     });
@@ -213,7 +213,7 @@ async function callQwenApi(msg,user,aiUserId) {
       //消息发送（当一个客户端发送一条消息时，服务器查找目标用户是否在线，如果在线，就把消息转发给该用户。）
       socket.on("send-msg", async (data) => {
         const {from,to,msg} =data;
-    
+
         // 检查消息是否是发给 AI 机器人的
         if(to===global.AI_USER_ID.toString()){
           console.log("Message is for AI. Calling Qwen API...");
@@ -227,10 +227,10 @@ async function callQwenApi(msg,user,aiUserId) {
               to:from,
               msg:aiReply,
             };
-    
+
             // 查找原始发送者的 socket ID
             const senderSocketId = userSocketMap.get(from); // 使用 userSocketMap 获取最新的 socket.id
-    
+
             if(senderSocketId){
               // 向原始发送者发送 AI 的回复
               console.log("【BACKEND】Emitting msg-recieve to socket:", senderSocketId, "with data:", replyData);
@@ -248,18 +248,18 @@ async function callQwenApi(msg,user,aiUserId) {
               to:from,
               msg:"抱歉，AI服务暂时不可用，请稍后再试。",
             };
-            const senderSocketId = onlineUsers.get(from);
+            const senderSocketId = userSocketMap.get(from);
             if(senderSocketId){
-              socket.to(senderSocketId).emit("msg-recieve",errorData);
+              io.to(senderSocketId).emit("msg-recieve",errorData);
             }
           }
         }else{
           // 消息是发给普通用户的，执行原有逻辑
-          const sendUserSocket = onlineUsers.get(data.to);
+          const sendUserSocket = userSocketMap.get(data.to);
           console.log("发送成功");
           if (sendUserSocket) {
-            //在 Socket.IO 中，每个 socket ID 可以看作一个私有房间，所以 socket.to(sendUserSocket) 就表示向这个 socket ID 对应的客户端发送消息。
-            socket.to(sendUserSocket).emit("msg-recieve", {
+            //在 Socket.IO 中，每个 socket ID 可以看作一个私有房间，所以 io.to(sendUserSocket) 就表示向这个 socket ID 对应的客户端发送消息。
+            io.to(sendUserSocket).emit("msg-recieve", {
               from: data.from,
               to: data.to,
               msg: data.msg // 转发原始 msg 对象
