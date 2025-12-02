@@ -11,7 +11,7 @@ const MessageSchema = mongoose.Schema(
       },
       required: true,
     },
-    users: Array,
+    users: Array,//一个数组，存放对话双方的ID
     //标识这条消息的发送者
     sender: {
       type: mongoose.Schema.Types.ObjectId,
