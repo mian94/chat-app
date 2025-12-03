@@ -14,6 +14,7 @@ export default function Chat() {
   const [contacts, setContacts] = useState([]);//显示联系人列表
   const [currentChat, setCurrentChat] = useState(undefined);//当前正在聊天的对象
   const [currentUser, setCurrentUser] = useState(undefined);//当前用户
+  const [showChat, setShowChat] = useState(false);//移动端：是否显示聊天界面（默认不显示）
   
   //检查用户是否已登录
   useEffect(() => {
@@ -55,13 +56,28 @@ export default function Chat() {
 
   const handleChatChange = (chat) => {
     setCurrentChat(chat);
+    setShowChat(true); //移动端：点击联系人后显示聊天界面
+  };
+  
+  //移动端：返回联系人列表
+  const handleBackToContacts = () => {
+    setShowChat(false);
+    setCurrentChat(undefined);
   };
   return (
     <>
       <Container>
         <div className="container">
-          <Contacts contacts={contacts} changeChat={handleChatChange} />
-          <ChatContainer currentChat={currentChat} socket={socket} />
+          {/* 移动端：根据showChat状态显示不同界面 */}
+          <div className={`mobile-layout ${showChat ? 'chat-active' : 'contacts-active'}`}>
+            <Contacts contacts={contacts} changeChat={handleChatChange} />
+            <ChatContainer 
+              currentChat={currentChat} 
+              socket={socket} 
+              onBack={handleBackToContacts} //传递返回函数
+              showBackButton={true} //显示返回按钮
+            />
+          </div>
         </div>
       </Container>
     </>
@@ -90,6 +106,42 @@ const Container = styled.div`
       grid-template-columns: 1fr;
       width: 100vw;
       height: 100vh;
+    }
+  }
+  
+  /* 移动端布局切换 */
+  .mobile-layout {
+    @media screen and (max-width: 719px) {
+      display: flex;
+      height: 100%;
+      width: 100%;
+      position: relative;
+    }
+  }
+  
+  /* 移动端：联系人激活状态 */
+  .contacts-active {
+    @media screen and (max-width: 719px) {
+      > div:first-child {
+        display: block;
+      }
+      > div:last-child {
+        display: none;
+      }
+    }
+  }
+  
+  /* 移动端：聊天激活状态 */
+  .chat-active {
+    @media screen and (max-width: 719px) {
+      > div:first-child {
+        display: none;
+      }
+      > div:last-child {
+        display: block;
+        width: 100%;
+        height: 100%;
+      }
     }
   }
 `;

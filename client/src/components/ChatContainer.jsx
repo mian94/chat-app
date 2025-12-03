@@ -9,7 +9,7 @@ import Logout from "./Logout";
 
 
 //socket(ref)：	Socket.IO 客户端连接实例，用 useRef 包装
-export default function ChatContainer({ currentChat, socket }) {
+export default function ChatContainer({ currentChat, socket, onBack, showBackButton }) {
   const [messages, setMessages] = useState([]);
   const scrollRef = useRef();//引用最后一条消息元素，用于滚动到底部
   const [arrivalMessage, setArrivalMessage] = useState(null);//接收到的新消息
@@ -106,6 +106,12 @@ export default function ChatContainer({ currentChat, socket }) {
   return (
     <Container>
       <div className="chat-header">
+        {/* 移动端返回按钮 */}
+        {showBackButton && currentChat && (
+          <div className="back-button" onClick={onBack}>
+            ←
+          </div>
+        )}
         <div className="user-details">
           <div className="username">
             <h3>{currentChat?.username}</h3>
@@ -171,10 +177,29 @@ const Container = styled.div`
     justify-content: space-between;
     align-items: center;
     padding: 0 2rem;
+    @media screen and (max-width: 719px) {
+      padding: 0 1rem;
+    }
+    
+    .back-button {
+      display: none;
+      @media screen and (max-width: 719px) {
+        display: block;
+        color: white;
+        font-size: 1.5rem;
+        cursor: pointer;
+        padding: 0.5rem;
+        margin-right: 1rem;
+      }
+    }
+    
     .user-details {
       display: flex;
       align-items: center;
       gap: 1rem;
+      @media screen and (max-width: 719px) {
+        gap: 0.5rem;
+      }
       .avatar {
         img {
           height: 3rem;
