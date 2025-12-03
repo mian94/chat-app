@@ -214,6 +214,11 @@ const Container = styled.div`
         @media screen and (min-width: 720px) and (max-width: 1080px) {
           max-width: 70%;
         }
+        @media screen and (max-width: 719px) {
+          max-width: 85%;
+          font-size: 1rem;
+          padding: 0.8rem;
+        }
       }
     }
     .sended {

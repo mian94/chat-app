@@ -62,6 +62,9 @@ const Container = styled.div`
   grid-template-rows: 10% 75% 15%;
   overflow: hidden;
   background-color: #080420;
+  @media screen and (max-width: 719px) {
+    grid-template-rows: 15% 70% 15%;
+  }
   .brand {
     display: flex;
     align-items: center;
@@ -69,10 +72,16 @@ const Container = styled.div`
     justify-content: center;
     img {
       height: 2rem;
+      @media screen and (max-width: 719px) {
+        height: 1.5rem;
+      }
     }
     h3 {
       color: white;
       text-transform: uppercase;
+      @media screen and (max-width: 719px) {
+        font-size: 1.2rem;
+      }
     }
   }
   .contacts {

@@ -172,7 +172,7 @@ async function callQwenApi(msg,user,aiUserId) {
     //初始化Socket.IO
     const io = socket(server, {
       cors: {
-        origin: "http://8.137.53.3:3000",
+        origin: ["http://8.137.53.3:3000", "http://localhost:3000", "http://127.0.0.1:3000"],
         credentials: true,
       },
     });

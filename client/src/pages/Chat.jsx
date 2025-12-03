@@ -86,5 +86,10 @@ const Container = styled.div`
     @media screen and (min-width: 720px) and (max-width: 1080px) {
       grid-template-columns: 35% 65%;
     }
+    @media screen and (max-width: 719px) {
+      grid-template-columns: 1fr;
+      width: 100vw;
+      height: 100vh;
+    }
   }
 `;
