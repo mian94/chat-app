@@ -1,274 +1,340 @@
 const express = require("express");
 const cors = require("cors");
+const path = require("path");
 const mongoose = require("mongoose");
+const socketIo = require("socket.io");
+const axios = require("axios");
 const userRoutes = require("./routes/userRoutes");
 const messageRoutes = require("./routes/messages");
-const socket = require("socket.io");
-const axios = require('axios');
-const path = require('path'); 
-const fs = require('fs');
-const multer = require('multer');
-const Message = require('./models/messageModel');
-const User = require('./models/userModel');
+const User = require("./models/userModel");
+const Message = require("./models/messageModel");
+const { errorHandler, notFound } = require("./middleware/errorMiddleware");
+const requestLogger = require("./middleware/requestLogger");
+const { getUploadCategory, upload } = require("./middleware/upload");
+const { hasMessageContent, normalizeMessageContent } = require("./utils/normalizeMessage");
+const AppError = require("./utils/AppError");
+const logger = require("./utils/logger");
+const {
+  clientOrigins,
+  mongoConnectTimeoutMs,
+  mongoUrl,
+  port,
+  qwenApiKey,
+  uploadDir,
+} = require("./config/env");
 
 const app = express();
-require("dotenv").config(); //加载 .env 文件中定义的环境变量。
+let httpServer = null; //保存最终启动后的 HTTP 服务对象，后面关闭服务时会用到
 
-app.use(cors());
-app.use(express.json());
-app.use(express.static('dist'));
+global.AI_USER_ID = null;
+global.onlineUsers = new Map(); //保存当前用户映射关系：userId -> socket.id
 
-app.use("/api/auth",userRoutes);
+//注册中间件
+app.use(cors({
+  origin: clientOrigins,
+  credentials: true,
+}));
+app.use(express.json({ limit: "1mb" }));
+app.use(requestLogger);
+
+//注册路由和上传接口
+app.use("/api/auth", userRoutes);
 app.use("/api/messages", messageRoutes);
-
-// 确保 uploads 目录存在
-const uploadDir = path.join(__dirname, 'uploads');
-if (!fs.existsSync(uploadDir)) {
-  fs.mkdirSync(uploadDir, { recursive: true });//同步创建目录
-}
-
-// 配置 multer 存储
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    cb(null, uploadDir); // 保存到 uploads 目录
-  },
-  filename: (req, file, cb) => { //定义上传后的文件名
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-    cb(null, file.fieldname + '-' + uniqueSuffix + path.extname(file.originalname));
-  }
-});
-
-//创建multer实例（使用上面定义的存储配置）
-const upload = multer({ storage: storage });
-
-//修复文件名
-function fixFilename(name) {
-  try {
-    const buffer = Buffer.from(name, 'latin1');
-    const utf8 = buffer.toString('utf8');
-    // 简单验证：是否包含中文或看起来合理
-    if (/[\u4e00-\u9fa5]/.test(utf8)) {//检查是否有中文字符
-      return utf8;
-    }
-  } catch (e) {
-    console.warn('Fix filename failed:', e);
-  }
-  return name;
-}
-
-// 文件上传路由
-app.post('/api/upload', upload.single('file'), (req, res) => {
+app.post("/api/upload", upload.single("file"), (req, res, next) => {
   try {
     if (!req.file) {
-      return res.status(400).json({ success: false, message: 'No file uploaded' });
+      return next(new AppError("No file uploaded.", 400));
     }
-    // 构建文件的完整 URL
-    const fileUrl = `${req.protocol}://${req.get('host')}/uploads/${req.file.filename}`;
-    const fileType = req.file.mimetype.startsWith('image/') ? 'image' : 
-                     req.file.mimetype.startsWith('video/') ? 'video' : 'file';
 
-    res.json({
+    const fileUrl = `${req.protocol}://${req.get("host")}/uploads/${req.file.filename}`;
+    const fileType = getUploadCategory(req.file.mimetype);
+
+    return res.json({
       success: true,
       url: fileUrl,
-      type: fileType, // 告知前端文件类型，便于显示
-      filename: fixFilename(req.file.originalname)
+      type: fileType,
+      filename: req.file.originalname,
     });
   } catch (error) {
-    console.error('File upload error:', error);
-    res.status(500).json({ success: false, message: 'Upload failed' });
+    next(error); //把错误交给全局错误处理中间件
   }
 });
 
-// 提供静态文件服务，让上传的文件可以被访问
-app.use('/uploads', express.static(uploadDir));
+//静态文件访问
+app.use(
+  "/uploads",
+  express.static(uploadDir, {
+    setHeaders(res, filePath) {
+      const extension = path.extname(filePath).toLowerCase();
+      const inlineExtensions = new Set([".jpg", ".jpeg", ".png", ".mp4"]);
 
-global.AI_USER_ID = null; 
-mongoose
-.connect(process.env.MONGO_URL)
-.then(async() => {
-    console.log("DB Connection Successful");
-
-    try{
-      const aiUser = await User.findOne({username:'通义千问'});
-      if(!aiUser){
-        const newAiUser = await User.create({
-          _id: new mongoose.Types.ObjectId(),
-          username: '通义千问',
-          email: 'ai-qwen@alibaba.com',
-          password: 'fackpassword',
-          isAI: true
-        });
-        console.log('AI User created:',newAiUser._id);
-        global.AI_USER_ID = newAiUser._id;
-      }else{
-        console.log('AI User already exists:',aiUser._id);
-        global.AI_USER_ID = aiUser._id;
+      res.setHeader("X-Content-Type-Options", "nosniff");
+      if (!inlineExtensions.has(extension)) {
+        res.setHeader("Content-Disposition", "attachment");
       }
-    }catch(error){
-      console.error('Error creating AI user:', error);
-    }
-})
-.catch((err) => {
-    console.log(err.message);
-});
+    },
+  })
+);
 
-//API函数
-async function callQwenApi(msg,user,aiUserId) {
-  console.log("Calling Qwen API with message:", msg);
+app.use(notFound); //处理没命中的路由
+app.use(errorHandler); //处理整个请求链路里抛出的错误
+
+//AI用户初始化
+async function ensureAiUser() {
   try {
-    const response = await axios.post(
-      'https://dashscope.aliyuncs.com/api/v1/services/aigc/text-generation/generation',//API 端点
-      {
-        model: 'qwen-turbo',
-        input: {
-          messages: [
-            { role: 'system', content: '你是一个乐于助人的AI助手，名叫通义千问。请用友好、简洁的中文回答问题。' },
-            { role: 'user', content: msg }
-          ]
-        },
-        parameters: {
-          result_format: 'message',
-          max_tokens: 1024, // 限制回复长度
-          temperature: 0.7, // 控制回复的随机性
-        }
-      },
-      {
-        headers: {
-          'Authorization': `Bearer ${process.env.QWEN_API_KEY}`, // 使用 Bearer Token 认证
-          'Content-Type': 'application/json'
-        }
-      }
-    );
-    console.log("Qwen API Response Status:", response.status); // 检查状态码
-    console.log("Qwen API Response Data:", JSON.stringify(response.data, null, 2)); //打印完整的响应数据
+    //查数据库里有没有用户名是“通义千问”的用户
+    const existingAiUser = await User.findOne({ username: "通义千问" });
+    //如果有，就把它的 _id 存到 global.AI_USER_ID
+    if (existingAiUser) {
+      global.AI_USER_ID = existingAiUser._id;
+      logger.info("AI user loaded", { aiUserId: String(existingAiUser._id) });
+      return;
+    }
 
-    const aiReply = response.data.output.choices[0].message.content;
-
-    //保存 AI 回复到数据库
-    const newMessage = new Message({
-      message: {
-        text: aiReply,
-        mediaUrl: null,
-        mediaType: null,
-        fileName: null
-      },
-      users:[user,aiUserId],
-      sender:aiUserId
+    //如果没有，就创建一个 AI 用户
+    const aiUser = await User.create({
+      username: "通义千问",
+      email: "ai-qwen@alibaba.com",
+      password: "fakepassword",
+      isAI: true,
     });
-    await newMessage.save(); // ✅ 真正存入数据库
-
-    return aiReply;
+    //创建后同样保存 _id
+    global.AI_USER_ID = aiUser._id;
+    logger.info("AI user created", { aiUserId: String(aiUser._id) });
   } catch (error) {
-    console.error("Error calling Qwen API:", error);
-    throw error; // 抛出错误以便外部处理
+    logger.error("Failed to prepare AI user", { message: error.message });
   }
 }
 
-    //启动服务器并监听指定端口
-    const server = app.listen(process.env.PORT,() => {
-        console.log(`Server Started on Port ${process.env.PORT}`)
-    });
-    
-    //初始化Socket.IO
-    const io = socket(server, {
-      cors: {
-        origin: ["http://8.137.53.3:3000", "http://localhost:3000", "http://127.0.0.1:3000"],
-        credentials: true,
+//调用AI接口
+async function callQwenApi(messageText, userId, aiUserId) {
+  if (!qwenApiKey) {
+    throw new AppError("Qwen API key is not configured.", 503);
+  }
+
+  if (!messageText?.trim()) {
+    return {
+      text: "当前 AI 对话只支持文本消息，请先输入文字。",
+      mediaUrl: null,
+      mediaType: null,
+      fileName: null,
+    };
+  }
+
+  logger.info("Calling Qwen API", { userId });
+
+  //服务端主动请求通义千问接口
+  const response = await axios.post(
+    "https://dashscope.aliyuncs.com/api/v1/services/aigc/text-generation/generation",
+    {
+      model: "qwen-turbo",
+      input: {
+        messages: [
+          {
+            role: "system",
+            content: "你是一个乐于助人的AI助手，名叫通义千问。请用友好、简洁的中文回答问题。",
+          },
+          { role: "user", content: messageText },
+        ],
       },
+      parameters: {
+        result_format: "message",
+        max_tokens: 1024,
+        temperature: 0.7,
+      },
+    },
+    {
+      headers: {
+        Authorization: `Bearer ${qwenApiKey}`,
+        "Content-Type": "application/json",
+      },
+      timeout: 15000,
+    }
+  );
+
+  //提取AI回复
+  const aiReply = response.data?.output?.choices?.[0]?.message?.content?.trim();
+  if (!aiReply) {
+    throw new AppError("AI service returned an empty response.", 502);
+  }
+
+  const messageData = {
+    text: aiReply,
+    mediaUrl: null,
+    mediaType: null,
+    fileName: null,
+  };
+
+  //AI回复发给前端并持久化保存
+  await Message.create({
+    message: messageData,
+    users: [userId, aiUserId],
+    sender: aiUserId,
+  });
+
+  return messageData;
+}
+
+//Socket配置
+function configureSocket(server) {
+  const io = socketIo(server, {
+    cors: {
+      origin: clientOrigins,
+      credentials: true,  
+    },
+  });
+
+  io.on("connection", (socket) => {
+    logger.info("Socket connected", { socketId: socket.id });
+
+    socket.on("error", (error) => {
+      logger.error("Socket error", { message: error.message, socketId: socket.id });
     });
-    //全局变量onlineUsers存储当前在线用户的映射关系，键为用户ID，值为该用户的socket ID。
-    global.onlineUsers = new Map();
-    
-    //定义一个 Map 来存储 userId -> current socket.id
-    const userSocketMap = new Map();
-    
-    //新的客户端连接到服务器时
-    io.on("connection", (socket) => {
-      global.chatSocket = socket;
-    
-      //立即监听 disconnect 事件（在 add-user 之前）
-      socket.on("disconnect",() => {
-        let removedUserId = null;
-        for(const [userId,socketId] of onlineUsers.entries()){
-          if(socketId===socket.id){
-            onlineUsers.delete(userId);
-            userSocketMap.delete(userId); // 同步删除 userSocketMap 中的记录
-            removedUserId = userId;
-            break;
-          }
+
+    socket.on("disconnect", (reason) => {
+      let disconnectedUserId = null;
+
+      for (const [userId, socketId] of global.onlineUsers.entries()) {
+        if (socketId === socket.id) {
+          global.onlineUsers.delete(userId);
+          disconnectedUserId = userId;
+          break;
         }
-        if(removedUserId) {
-          console.log(`User ${removedUserId} disconnected (Socket ID: ${socket.id}) and removed from online list.`);
-        }else{
-          console.log(`Socket disconnected (Socket ID: ${socket.id}), but no matching user found in online list.`);
+      }
+
+      logger.info("Socket disconnected", {
+        reason,
+        socketId: socket.id,
+        userId: disconnectedUserId,
+      });
+    });
+
+    socket.on("add-user", (userId) => {
+      if (!userId) {
+        return;
+      }
+
+      global.onlineUsers.set(userId, socket.id);
+      logger.info("User joined socket room", { socketId: socket.id, userId });
+    });
+
+    socket.on("send-msg", async (payload) => {
+      try {
+        //基础校验
+        const from = payload?.from;
+        const to = payload?.to;
+        const normalizedMessage = normalizeMessageContent(payload?.msg);
+
+        if (!from || !to || !hasMessageContent(normalizedMessage)) {
+          logger.warn("Ignored invalid socket message", { payload });
+          return;
         }
-      });
-    
-      //用户上线
-      socket.on("add-user", (userId) => {
-        userSocketMap.set(userId, socket.id); //关键：使用 Map 存储最新 socket.id
-        onlineUsers.set(userId, socket.id);
-      });
-    
-      //消息发送（当一个客户端发送一条消息时，服务器查找目标用户是否在线，如果在线，就把消息转发给该用户。）
-      socket.on("send-msg", async (data) => {
-        const {from,to,msg} =data;
 
-        // 检查消息是否是发给 AI 机器人的
-        if(to===global.AI_USER_ID.toString()){
-          console.log("Message is for AI. Calling Qwen API...");
-          try{
-            //直接调用通义千问 API
-            const aiReply = await callQwenApi(msg.text,from,to); // 使用上面定义的 callQwenApi 函数
-            console.log("Qwen API Response:", aiReply); 
-            // 构造回复消息，from 是 AI 的 ID，to 是原始发送者
-            const replyData = {
-              from:to,
-              to:from,
-              msg:aiReply,
-            };
+        //如果发消息给AI
+        const aiUserId = global.AI_USER_ID?.toString();
+        if (aiUserId && to === aiUserId) {
+          const aiReply = await callQwenApi(normalizedMessage.text, from, aiUserId);
+          const senderSocketId = global.onlineUsers.get(from);
 
-            // 查找原始发送者的 socket ID
-            const senderSocketId = userSocketMap.get(from); // 使用 userSocketMap 获取最新的 socket.id
-
-            if(senderSocketId){
-              // 向原始发送者发送 AI 的回复
-              console.log("【BACKEND】Emitting msg-recieve to socket:", senderSocketId, "with data:", replyData);
-              io.to(senderSocketId).emit("msg-recieve",replyData);// 使用 io.to 而不是 socket.to
-              console.log("【BACKEND】Emit msg-recieve completed.");
-            }else{
-              // 如果发送者不在线，可以考虑存入数据库作为离线消息（可选）
-              console.log(`User ${from} is offline. AI reply stored.`);
-            }
-          }catch(error){
-            console.error("Error calling Qwen API:", error);
-            // 发送一个错误消息给用户
-            const errorData = {
-              from:to,
-              to:from,
-              msg:"抱歉，AI服务暂时不可用，请稍后再试。",
-            };
-            const senderSocketId = userSocketMap.get(from);
-            if(senderSocketId){
-              io.to(senderSocketId).emit("msg-recieve",errorData);
-            }
-          }
-        }else{
-          // 消息是发给普通用户的，执行原有逻辑
-          const sendUserSocket = userSocketMap.get(data.to);
-          console.log("发送成功");
-          if (sendUserSocket) {
-            //在 Socket.IO 中，每个 socket ID 可以看作一个私有房间，所以 io.to(sendUserSocket) 就表示向这个 socket ID 对应的客户端发送消息。
-            io.to(sendUserSocket).emit("msg-recieve", {
-              from: data.from,
-              to: data.to,
-              msg: data.msg // 转发原始 msg 对象
+          if (senderSocketId) {
+            io.to(senderSocketId).emit("msg-recieve", {
+              from: aiUserId,
+              to: from,
+              msg: aiReply,
             });
           }
+
+          return;
         }
-      });
+
+        //如果消息发给普通用户
+        const targetSocketId = global.onlineUsers.get(to);
+        if (targetSocketId) {
+          io.to(targetSocketId).emit("msg-recieve", {
+            from,
+            to,
+            msg: normalizedMessage,
+          });
+        }
+
+        logger.info("Socket message dispatched", {
+          from,
+          to,
+          delivered: Boolean(targetSocketId),
+        });
+      } catch (error) {
+        logger.error("Socket send-msg handler failed", {
+          message: error.message,
+          socketId: socket.id,
+        });
+
+        const senderSocketId = global.onlineUsers.get(payload?.from);
+        if (senderSocketId) {
+          io.to(senderSocketId).emit("msg-recieve", {
+            from: global.AI_USER_ID?.toString() || "system",
+            to: payload?.from,
+            msg: {
+              text: "抱歉，消息处理失败，请稍后再试。",
+              mediaUrl: null,
+              mediaType: null,
+              fileName: null,
+            },
+          });
+        }
+      }
     });
+  });
+}
 
+async function startServer() {
+  //检查 Mongo 配置
+  if (!mongoUrl) {
+    throw new Error("MONGO_URL is required before starting the server.");
+  }
 
+  //连接数据库
+  await mongoose.connect(mongoUrl, {
+    serverSelectionTimeoutMS: mongoConnectTimeoutMs,
+  });
+  logger.info("MongoDB connected");
+  //初始化 AI 用户
+  await ensureAiUser();
 
+  // 启动 HTTP 服务
+  httpServer = app.listen(port, () => {
+    logger.info("Server started", { port });
+  });
 
+  //启动 Socket.IO
+  configureSocket(httpServer);
+}
+
+function shutdown(exitCode) {
+  logger.error("Server is shutting down", { exitCode });
+
+  if (httpServer) {
+    httpServer.close(() => {
+      process.exit(exitCode);
+    });
+    return;
+  }
+
+  process.exit(exitCode);
+}
+
+process.on("unhandledRejection", (reason) => {
+  logger.error("Unhandled promise rejection", {
+    reason: reason instanceof Error ? reason.message : String(reason),
+  });
+  shutdown(1);
+});
+
+process.on("uncaughtException", (error) => {
+  logger.error("Uncaught exception", { message: error.message });
+  shutdown(1);
+});
+
+startServer().catch((error) => {
+  logger.error("Failed to start server", { message: error.message });
+  shutdown(1);
+});

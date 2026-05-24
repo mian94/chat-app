@@ -1,0 +1,13 @@
+[31mfailed to load config from D:\code\front-end\chat-app\client\vite.config.js[39m
+[31merror when starting dev server:
+Error: spawn EPERM
+    at ChildProcess.spawn (node:internal/child_process:420:11)
+    at Object.spawn (node:child_process:796:9)
+    at ensureServiceIsRunning (D:\code\front-end\chat-app\client\node_modules\esbuild\lib\main.js:1978:29)
+    at build (D:\code\front-end\chat-app\client\node_modules\esbuild\lib\main.js:1876:26)
+    at bundleConfigFile (file:///D:/code/front-end/chat-app/client/node_modules/vite/dist/node/chunks/dep-eRCq8YxU.js:36639:23)
+    at async bundleAndLoadConfigFile (file:///D:/code/front-end/chat-app/client/node_modules/vite/dist/node/chunks/dep-eRCq8YxU.js:36627:18)
+    at async loadConfigFromFile (file:///D:/code/front-end/chat-app/client/node_modules/vite/dist/node/chunks/dep-eRCq8YxU.js:36595:42)
+    at async resolveConfig (file:///D:/code/front-end/chat-app/client/node_modules/vite/dist/node/chunks/dep-eRCq8YxU.js:36241:22)
+    at async _createServer (file:///D:/code/front-end/chat-app/client/node_modules/vite/dist/node/chunks/dep-eRCq8YxU.js:28436:67)
+    at async CAC.<anonymous> (file:///D:/code/front-end/chat-app/client/node_modules/vite/dist/node/cli.js:573:18)[39m

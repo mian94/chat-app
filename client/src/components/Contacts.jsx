@@ -1,125 +1,154 @@
-//用于展示用户的联系人列表，并允许用户选择一个联系人进行聊天。
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import styled from "styled-components";
 import logo from "../assets/logo.svg";
+import useDebouncedValue from "../hooks/useDebouncedValue";
 
-//contacts（联系人列表）和 changeChat（切换当前聊天对象的回调函数）
-export default function Contacts({ contacts, changeChat }) {
-  const [currentUserName, setCurrentUserName] = useState(undefined);//当前登录用户的用户名
-  const [currentSelected, setCurrentSelected] = useState(undefined);// 当前选中的联系人索引，用于高亮显示选中的联系人
+export default function Contacts({ contacts, changeChat, currentUser }) {
+  const [currentSelected, setCurrentSelected] = useState(undefined);
+  const [keyword, setKeyword] = useState("");
+  const debouncedKeyword = useDebouncedValue(keyword, 300);
 
-  //获取当前用户名
-  useEffect(() => {
-    const fetchUserName = async () => {
-      const data = await JSON.parse(localStorage.getItem('chat-app-user'));
-      setCurrentUserName(data.username);
-    };
-    fetchUserName();
-  }, []);
+  const filteredContacts = contacts.filter((contact) =>
+    contact.username.toLowerCase().includes(debouncedKeyword.trim().toLowerCase())
+  );
 
-  //参数（联系人的索引，联系人对象）
   const changeCurrentChat = (index, contact) => {
     setCurrentSelected(index);
     changeChat(contact);
   };
+
   return (
-      <>
-        <Container>
-          <div className="brand">
-            <img src={logo} alt="logo" />
-            <h3>chat</h3>
-          </div>
-          <div className="contacts">
-            {contacts.map((contact, index) => {
-              return (
-                <div
-                  key={contact._id}
-                  //如果当前联系人项被选中（即其索引等于 currentSelected），则添加 "selected" 类名来改变样式。
-                  className={`contact ${
-                    index === currentSelected ? "selected" : ""
-                  }`}
-                  onClick={() => changeCurrentChat(index, contact)}
-                >
-                  <div className="username">
-                    <h3>{contact.username}</h3>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-          <div className="current-user">
-            <div className="username">
-              <h2>{currentUserName}</h2>
+    <Container>
+      <div className="brand">
+        <img src={logo} alt="logo" />
+        <h3>chat</h3>
+      </div>
+
+      <div className="search-box">
+        <input
+          type="text"
+          placeholder="搜索联系人"
+          value={keyword}
+          onChange={(event) => setKeyword(event.target.value)}
+        />
+      </div>
+
+      <div className="contacts">
+        {filteredContacts.length === 0 ? (
+          <div className="empty-state">没有匹配的联系人</div>
+        ) : (
+          filteredContacts.map((contact, index) => (
+            <div
+              key={contact._id}
+              className={`contact ${index === currentSelected ? "selected" : ""}`}
+              onClick={() => changeCurrentChat(index, contact)}
+            >
+              <div className="username">
+                <h3>{contact.username}</h3>
+              </div>
             </div>
-          </div>
-        </Container>
-      </>
+          ))
+        )}
+      </div>
+
+      <div className="current-user">
+        <div className="username">
+          <h2>{currentUser?.username || "未登录"}</h2>
+        </div>
+      </div>
+    </Container>
   );
 }
 
 const Container = styled.div`
   display: grid;
-  grid-template-rows: 10% 75% 15%;
+  grid-template-rows: 10% 12% 63% 15%;
   overflow: hidden;
   background-color: #080420;
+
   @media screen and (max-width: 719px) {
-    grid-template-rows: 15% 70% 15%;
+    grid-template-rows: 14% 12% 59% 15%;
   }
+
   .brand {
     display: flex;
     align-items: center;
     gap: 1rem;
     justify-content: center;
+
     img {
       height: 2rem;
-      @media screen and (max-width: 719px) {
-        height: 1.5rem;
-      }
     }
+
     h3 {
       color: white;
       text-transform: uppercase;
-      @media screen and (max-width: 719px) {
-        font-size: 1.2rem;
-      }
     }
   }
+
+  .search-box {
+    padding: 0 1rem;
+    display: flex;
+    align-items: center;
+
+    input {
+      width: 100%;
+      border: 1px solid #3f316d;
+      border-radius: 0.75rem;
+      background-color: #120a2b;
+      color: white;
+      padding: 0.75rem 1rem;
+      outline: none;
+    }
+  }
+
   .contacts {
     display: flex;
     flex-direction: column;
     align-items: center;
     overflow: auto;
     gap: 0.8rem;
+    padding-bottom: 0.75rem;
+
     &::-webkit-scrollbar {
       width: 0.2rem;
+
       &-thumb {
         background-color: #ffffff39;
         width: 0.1rem;
         border-radius: 1rem;
       }
     }
-    .contact {
+
+    .contact,
+    .empty-state {
       background-color: #ffffff34;
-      min-height: 5rem;
-      cursor: pointer;
+      min-height: 4.5rem;
       width: 90%;
-      border-radius: 0.2rem;
-      padding: 0.4rem;
+      border-radius: 0.5rem;
+      padding: 0.4rem 1rem;
       display: flex;
       gap: 1rem;
       align-items: center;
-      transition: 0.5s ease-in-out;
-      .avatar {
-        img {
-          height: 3rem;
-        }
-      }
-      .username {
-        h3 {
-          color: white;
-        }
+    }
+
+    .contact {
+      cursor: pointer;
+      transition: 0.2s ease-in-out;
+    }
+
+    .empty-state {
+      justify-content: center;
+      color: #d9d4ff;
+      font-size: 0.95rem;
+    }
+
+    .username {
+      h3 {
+        color: white;
       }
     }
+
     .selected {
       background-color: #9a86f3;
     }
@@ -131,23 +160,10 @@ const Container = styled.div`
     justify-content: center;
     align-items: center;
     gap: 2rem;
-    .avatar {
-      img {
-        height: 4rem;
-        max-inline-size: 100%;
-      }
-    }
+
     .username {
       h2 {
         color: white;
-      }
-    }
-    @media screen and (min-width: 720px) and (max-width: 1080px) {
-      gap: 0.5rem;
-      .username {
-        h2 {
-          font-size: 1rem;
-        }
       }
     }
   }

@@ -1,91 +1,91 @@
+const mongoose = require("mongoose"); //这里主要用它做 ObjectId 校验
 const Messages = require("../models/messageModel");
+const AppError = require("../utils/AppError");
+const {
+  hasMessageContent,
+  normalizeMessageContent,
+} = require("../utils/normalizeMessage");
 
 module.exports.getMessages = async (req, res, next) => {
   try {
-    const { from, to } = req.body;
-    //查询数据库中的聊天记录
-    const messages = await Messages.find({
-      users: {
-        $all: [from, to],//使用 MongoDB 的 $all操作符查询包含这两个用户的对话记录。
-      },
-    }).sort({ updatedAt: 1 });//按照时间升序排列
+    const { from, to, cursor } = req.body;
+    const pageSize = Math.min(Math.max(Number(req.body.pageSize) || 20, 1), 50);
 
-    const projectedMessages = messages.map((msg) => {
-      //确保 message 是对象格式
-      const messageContent = typeof msg.message === 'string'
-        ? { text: msg.message, mediaUrl: null, mediaType: null,fileName: null }
-        : {
-            text: msg.message.text || "",
-            mediaUrl: msg.message.mediaUrl || null,
-            mediaType: msg.message.mediaType || null,
-            fileName: msg.message.fileName || null
-          };
-      return {
-        // 判断这条消息是不是由 from 用户（即当前用户）发送的。
-        fromSelf: msg.sender.toString() === from,
-        message: messageContent,
-      };
+    if (!from || !to) {
+      return next(new AppError("Both sender and receiver ids are required.", 400));
+    }
+
+    const query = {
+      users: {
+        $all: [from, to],
+      },
+    };
+
+    if (cursor) {
+      if (!mongoose.Types.ObjectId.isValid(cursor)) {
+        return next(new AppError("Invalid message cursor.", 400));
+      }
+
+      query._id = { $lt: cursor };
+    }
+
+    const messages = await Messages.find(query)
+      .sort({ _id: -1 })
+      .limit(pageSize + 1);
+
+    const hasMore = messages.length > pageSize;
+    const pagedMessages = hasMore ? messages.slice(0, pageSize) : messages;
+    const orderedMessages = pagedMessages.reverse();
+
+    const projectedMessages = orderedMessages.map((messageDoc) => ({
+      id: messageDoc._id,
+      createdAt: messageDoc.createdAt,
+      fromSelf: messageDoc.sender.toString() === from,
+      message: normalizeMessageContent(messageDoc.message),
+    }));
+
+    return res.json({
+      success: true,
+      messages: projectedMessages,
+      hasMore,
+      nextCursor: hasMore ? projectedMessages[0]?.id || null : null,
+      pageSize,
     });
-    res.json(projectedMessages);
-  } catch (ex) {
-    next(ex);
+  } catch (error) {
+    next(error);
   }
 };
 
 module.exports.addMessage = async (req, res, next) => {
   try {
     const { from, to, message } = req.body;
-    
-    let messageData;
 
-    if (typeof message === 'string') {
-      // 兼容旧的字符串格式（可逐步淘汰）
-      messageData = {
-        text: message,
-        mediaUrl: null,
-        mediaType: null,
-        fileName:null
-      };
-    } else if (typeof message === 'object' && message !== null) {
-      // 正常对象格式
-      messageData = {
-        text: message.text || "",
-        mediaUrl: message.mediaUrl || null,
-        mediaType: message.mediaType || null,
-        fileName:message.fileName || null,
-      };
-    } else {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid message format. Expected string or object."
-      });
+    if (!from || !to) {
+      return next(new AppError("Both sender and receiver ids are required.", 400));
     }
 
-    // 创建新消息
+    const messageData = normalizeMessageContent(message);
+    if (!hasMessageContent(messageData)) {
+      return next(new AppError("Message content can not be empty.", 400));
+    }
+
     const data = await Messages.create({
       message: messageData,
       users: [from, to],
       sender: from,
     });
 
-    if (data) {
-      return res.json({
-        success: true,
-        msg: "Message added successfully.",
-        data: {
-          id: data._id,
-          fromSelf: true,
-          message: messageData,
-        }
-      });
-    } else {
-      return res.status(500).json({
-        success: false,
-        msg: "Failed to add message to the database"
-      });
-    }
-  } catch (ex) {
-    console.error("Error in addMessage:", ex);
-    next(ex);
+    return res.json({
+      success: true,
+      msg: "Message added successfully.",
+      data: {
+        id: data._id,
+        createdAt: data.createdAt,
+        fromSelf: true,
+        message: messageData,
+      },
+    });
+  } catch (error) {
+    next(error);
   }
 };

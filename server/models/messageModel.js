@@ -6,23 +6,26 @@ const MessageSchema = mongoose.Schema(
       type: {
         text: { type: String, default: "" },
         mediaUrl: { type: String, default: null },
-        mediaType: { type: String, default: null }, // "image", "video", "file"
+        mediaType: { type: String, default: null },
         fileName: { type: String, default: null },
       },
       required: true,
     },
-    users: Array,//一个数组，存放对话双方的ID
-    //标识这条消息的发送者
+    users: {
+      type: [String],
+      required: true,
+    },
     sender: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
       required: true,
     },
   },
-  //自动为文档添加 createdAt 和 updatedAt 时间戳字段（文档创建时间，文档最后更新时间）
   {
     timestamps: true,
   }
 );
+
+MessageSchema.index({ users: 1, createdAt: -1 });
 
 module.exports = mongoose.model("Messages", MessageSchema);

@@ -1,86 +1,115 @@
-import React, { useEffect, useState, useRef } from "react";
-import axios from "axios";
+import React, { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { io } from "socket.io-client";//实现实时通信（WebSocket）
+import { io } from "socket.io-client";
+import styled from "styled-components";
 import { allUsersRoute, host } from "../utils/APIRoutes";
+import apiClient, { getErrorMessage } from "../utils/apiClient";
+import { CHAT_USER_STORAGE_KEY } from "../constants/app";
 import ChatContainer from "../components/ChatContainer";
 import Contacts from "../components/Contacts";
-import styled from "styled-components";
 
 export default function Chat() {
   const navigate = useNavigate();
-  //使用 useRef 来保存 socket 实例，确保在整个组件生命周期中都能访问到同一个 socket 连接。
-  const socket = useRef();
-  const [contacts, setContacts] = useState([]);//显示联系人列表
-  const [currentChat, setCurrentChat] = useState(undefined);//当前正在聊天的对象
-  const [currentUser, setCurrentUser] = useState(undefined);//当前用户
-  const [showChat, setShowChat] = useState(false);//移动端：是否显示聊天界面（默认不显示）
-  
-  //检查用户是否已登录
+  const socket = useRef(null);
+  const [contacts, setContacts] = useState([]);
+  const [currentChat, setCurrentChat] = useState(undefined);
+  const [currentUser, setCurrentUser] = useState(undefined);
+  const [pageMessage, setPageMessage] = useState(""); //页面级请求提示
+  const [socketMessage, setSocketMessage] = useState(""); //socket连接提示
+
   useEffect(() => {
-    const checkUser = async () => {
-      if (!localStorage.getItem('chat-app-user')) {
-        navigate("/login");//本地存储不存在 'chat-app-user' 键，跳转到登录页面
-      } else {
-        const user = JSON.parse(localStorage.getItem('chat-app-user'));
-        setCurrentUser(user);
+    const storedUser = localStorage.getItem(CHAT_USER_STORAGE_KEY);
+    if (!storedUser) {
+      navigate("/login");
+      return;
+    }
+
+    try {
+      setCurrentUser(JSON.parse(storedUser));
+    } catch {
+      localStorage.removeItem(CHAT_USER_STORAGE_KEY);
+      navigate("/login");
+    }
+  }, [navigate]);
+
+  //建立socket连接
+  useEffect(() => {
+    if (!currentUser?._id) {
+      return undefined;
+    }
+
+    const nextSocket = io(host, {
+      reconnectionAttempts: 5,
+      timeout: 5000,
+    });
+
+    socket.current = nextSocket;
+
+    const handleConnect = () => {
+      setSocketMessage("");
+      nextSocket.emit("add-user", currentUser._id);
+    };
+
+    const handleConnectError = () => {
+      setSocketMessage("实时连接失败，正在尝试重新连接。");
+    };
+
+    const handleDisconnect = (reason) => {
+      if (reason !== "io client disconnect") {
+        setSocketMessage("实时连接已断开，消息可能会延迟。");
       }
     };
-    checkUser();
-  }, [navigate]);// 依赖数组，只有当 navigate 发生变化时才会重新执行此 effect
 
-  //初始化 WebSocket 并注册用户
-  useEffect(() => {
-    if (currentUser) {
-      socket.current = io(host);//登录成功，连接到 WebSocket 服务器
-      //发送 "add-user" 事件给服务器，携带当前用户的 ID，表示该用户上线。
-      socket.current.emit("add-user", currentUser._id);
-    }
+    nextSocket.on("connect", handleConnect);
+    nextSocket.on("connect_error", handleConnectError);
+    nextSocket.on("disconnect", handleDisconnect);
+
+    return () => {
+      nextSocket.off("connect", handleConnect);
+      nextSocket.off("connect_error", handleConnectError);
+      nextSocket.off("disconnect", handleDisconnect);
+      nextSocket.disconnect();
+      socket.current = null;
+    };
   }, [currentUser]);
 
-  //加载联系人列表
   useEffect(() => {
-    const fetchContacts = async () => {
-       if(currentUser){
-        try{
-          const res = await axios.get(`${allUsersRoute}/${currentUser._id}`);
-          setContacts(res.data);
-        }catch(error){
-          console.error("Error fetching contacts:", error);
-          setContacts([]);
-        }
+    async function fetchContacts() {
+      if (!currentUser?._id) {
+        return;
       }
-    };
+
+      try {
+        setPageMessage("");
+        const response = await apiClient.get(`${allUsersRoute}/${currentUser._id}`);
+        setContacts(Array.isArray(response.data) ? response.data : []);
+      } catch (error) {
+        setContacts([]);
+        setPageMessage(getErrorMessage(error, "联系人加载失败，请刷新页面重试。"));
+      }
+    }
+
     fetchContacts();
   }, [currentUser]);
 
-  const handleChatChange = (chat) => {
-    setCurrentChat(chat);
-    setShowChat(true); //移动端：点击联系人后显示聊天界面
-  };
-  
-  //移动端：返回联系人列表
-  const handleBackToContacts = () => {
-    setShowChat(false);
-    setCurrentChat(undefined);
-  };
   return (
-    <>
-      <Container>
-        <div className="container">
-          {/* 移动端：根据showChat状态显示不同界面 */}
-          <div className={`mobile-layout ${showChat ? 'chat-active' : 'contacts-active'}`}>
-            <Contacts contacts={contacts} changeChat={handleChatChange} />
-            <ChatContainer 
-              currentChat={currentChat} 
-              socket={socket} 
-              onBack={handleBackToContacts} //传递返回函数
-              showBackButton={true} //显示返回按钮
-            />
-          </div>
-        </div>
-      </Container>
-    </>
+    <Container>
+      {(pageMessage || socketMessage) && (
+        <div className="page-message">{pageMessage || socketMessage}</div>
+      )}
+      <div className="container">
+        <Contacts
+          contacts={contacts}
+          currentUser={currentUser}
+          changeChat={setCurrentChat}
+        />
+        <ChatContainer
+          currentChat={currentChat}
+          currentUser={currentUser}
+          socket={socket}
+        />
+      </div>
+    </Container>
   );
 }
 
@@ -90,58 +119,34 @@ const Container = styled.div`
   display: flex;
   flex-direction: column;
   justify-content: center;
-  gap: 1rem;
+  gap: 0.75rem;
   align-items: center;
   background-color: #131324;
+
+  .page-message {
+    width: 85vw;
+    padding: 0.75rem 1rem;
+    border-radius: 0.75rem;
+    background-color: #332940;
+    color: #f6d9ff;
+    font-size: 0.95rem;
+  }
+
   .container {
     height: 85vh;
     width: 85vw;
     background-color: #00000076;
     display: grid;
     grid-template-columns: 25% 75%;
+
     @media screen and (min-width: 720px) and (max-width: 1080px) {
       grid-template-columns: 35% 65%;
     }
+
     @media screen and (max-width: 719px) {
       grid-template-columns: 1fr;
       width: 100vw;
-      height: 100vh;
-    }
-  }
-  
-  /* 移动端布局切换 */
-  .mobile-layout {
-    @media screen and (max-width: 719px) {
-      display: flex;
-      height: 100%;
-      width: 100%;
-      position: relative;
-    }
-  }
-  
-  /* 移动端：联系人激活状态 */
-  .contacts-active {
-    @media screen and (max-width: 719px) {
-      > div:first-child {
-        display: block;
-      }
-      > div:last-child {
-        display: none;
-      }
-    }
-  }
-  
-  /* 移动端：聊天激活状态 */
-  .chat-active {
-    @media screen and (max-width: 719px) {
-      > div:first-child {
-        display: none;
-      }
-      > div:last-child {
-        display: block;
-        width: 100%;
-        height: 100%;
-      }
+      height: calc(100vh - 2rem);
     }
   }
 `;
